@@ -49,7 +49,7 @@ We are **not** building a full hospital system. We are building:
 - **ML Task:** Regression (predicting a continuous number — minutes)
 - **Target Variable:** `wait_time_minutes`
 
-### The Feature Set
+### The Feature Set (11 Features)
 
 | Feature | Description | Type |
 |---|---|---|
@@ -79,9 +79,9 @@ We are **not** building a full hospital system. We are building:
 
 | Model | MAE | RMSE | R² |
 |---|---|---|---|
-| Linear Regression | 8.92 min | 11.19 min | 0.8649 |
-| Decision Tree | 9.63 min | 12.12 min | 0.8413 |
-| **Random Forest** | **8.83 min** | **11.08 min** | **0.8673** |
+| Linear Regression | ~ 31.18 min | ~ 49.14 min | ~ 0.6264 |
+| Decision Tree | ~ 20.77 min | ~ 37.10 min | ~ 0.7870 |
+| **Random Forest** | **~ 15.51 min** | **~ 29.14 min** | **~ 0.8686** |
 
 ---
 
@@ -89,13 +89,12 @@ We are **not** building a full hospital system. We are building:
 
 - [ ] **Contact Person** — confirm who your hospital contact is and their role
 - [ ] **Hospital Name / Type** — public? private? affects the stakeholders slide
-- [ ] **Web App Framework** — Streamlit (recommended) vs Flask
 
 ---
 
 ## Project Roadmap
 
-```
+```text
 WEEK 1 — Foundation
 ├── Confirm client contact person
 ├── Define features and target variable ✅
@@ -109,9 +108,9 @@ WEEK 2 — Modelling
 └── Checkpoint: show teacher model comparison results
 
 WEEK 3 — Web App
-├── Build Streamlit web app
-├── Load trained model in the app
-├── User inputs patient info → app shows predicted wait time
+├── Build Streamlit web app ✅
+├── Load trained model in the app ✅
+├── User inputs patient info → app shows predicted wait time ✅
 └── Checkpoint: live demo of the app
 
 WEEK 4 — Presentation
@@ -192,7 +191,7 @@ streamlit run app/app.py
 - [x] `train_models.py`
 - [x] `model/best_model.pkl`
 - [x] `model/plots/` — all 4 plots
-- [ ] `app/app.py`
+- [x] `app/app.py`
 - [x] `requirements.txt`
 
 ### Presentation
