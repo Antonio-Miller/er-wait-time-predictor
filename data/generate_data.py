@@ -2,20 +2,6 @@
 generate_data.py
 ================
 Synthetic data generator for the ER Wait Time Prediction POC.
-
-Generates realistic fake patient arrival records with wait times
-that follow patterns observed in real emergency departments:
-  - Rush hours (morning + evening) have longer waits
-  - Weekends are busier
-  - More critical triage levels (lower number) = shorter wait
-  - More patients in waiting room = longer wait
-  - More doctors on duty = shorter wait
-
-Usage:
-    python generate_data.py
-
-Output:
-    data/synthetic_er_data.csv  (10,000 rows)
 """
 
 import numpy as np
@@ -28,192 +14,137 @@ np.random.seed(RANDOM_SEED)
 
 # ── Config ───────────────────────────────────────────────────────────────────
 N_ROWS = 10_000
-OUTPUT_DIR = "dataset"
+OUTPUT_DIR = "data" 
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "synthetic_er_data.csv")
 
-
-# ── Helper: clamp values to a range ──────────────────────────────────────────
 def clamp(arr, lo, hi):
     return np.clip(arr, lo, hi)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# 1.  TEMPORAL FEATURES
+# 1. TEMPORAL FEATURES
 # ─────────────────────────────────────────────────────────────────────────────
+hour_of_day = np.random.randint(0, 24, N_ROWS)
+day_of_week = np.random.randint(0, 7, N_ROWS)
+month       = np.random.randint(1, 13, N_ROWS)
+is_weekend  = (day_of_week >= 5).astype(int)
 
-hour_of_day = np.random.randint(0, 24, N_ROWS)          # 0–23
-day_of_week = np.random.randint(0, 7, N_ROWS)           # 0 = Monday … 6 = Sunday
-month       = np.random.randint(1, 13, N_ROWS)          # 1–12
-
-is_weekend = (day_of_week >= 5).astype(int)
-
-# Season derived from month
 def month_to_season(m):
     if m in [12, 1, 2]:  return "Winter"
     if m in [3, 4, 5]:   return "Spring"
     if m in [6, 7, 8]:   return "Summer"
     return "Autumn"
-
 season = np.array([month_to_season(m) for m in month])
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# 2.  PATIENT FEATURES
+# 2. PATIENT FEATURES
 # ─────────────────────────────────────────────────────────────────────────────
+patient_age = np.random.randint(1, 101, N_ROWS)
+triage_level = np.random.choice([1, 2, 3, 4, 5], size=N_ROWS, p=[0.05, 0.10, 0.25, 0.35, 0.25])
 
-patient_age = np.random.randint(1, 101, N_ROWS)         # 1–100 years
-
-# Triage level: 1 (critical) → 5 (minor)
-# Weighted so minor complaints are more common
-triage_level = np.random.choice(
-    [1, 2, 3, 4, 5],
-    size=N_ROWS,
-    p=[0.05, 0.10, 0.25, 0.35, 0.25]
-)
-
-# Chief complaint category
-complaint_categories = [
-    "Trauma", "Cardiac", "Respiratory", "Abdominal",
-    "Neurological", "Musculoskeletal", "Infection", "Other"
-]
+complaint_categories = ["Trauma", "Cardiac", "Respiratory", "Abdominal", "Neurological", "Musculoskeletal", "Infection", "Other"]
 complaint_weights = [0.12, 0.10, 0.12, 0.15, 0.08, 0.18, 0.15, 0.10]
-chief_complaint_category = np.random.choice(
-    complaint_categories, size=N_ROWS, p=complaint_weights
-)
-
+chief_complaint_category = np.random.choice(complaint_categories, size=N_ROWS, p=complaint_weights)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  OPERATIONAL FEATURES
+# 3. OPERATIONAL FEATURES
 # ─────────────────────────────────────────────────────────────────────────────
-
-# Doctors on duty: fewer at night, more during day shifts
-# Base: 3 doctors; +2 during day (8–20h); −1 on weekends
 base_doctors = 3
-day_shift_bonus   = ((hour_of_day >= 8) & (hour_of_day < 20)).astype(int) * 2
-weekend_penalty   = is_weekend * (-1)
-doctors_on_duty   = clamp(
-    base_doctors + day_shift_bonus + weekend_penalty
-    + np.random.randint(-1, 2, N_ROWS),   # small random variation
-    lo=1, hi=8
-)
+day_shift_bonus = ((hour_of_day >= 8) & (hour_of_day < 20)).astype(int) * 2
+weekend_penalty = is_weekend * (-1)
+doctors_on_duty = clamp(base_doctors + day_shift_bonus + weekend_penalty + np.random.randint(-1, 2, N_ROWS), lo=1, hi=8)
 
-# Nurses: roughly 2× doctors with some noise
-nurses_on_duty = clamp(
-    doctors_on_duty * 2 + np.random.randint(-1, 2, N_ROWS),
-    lo=2, hi=16
-)
+nurses_on_duty = clamp(doctors_on_duty * 2 + np.random.randint(-1, 2, N_ROWS), lo=2, hi=16)
 
-# Patients in waiting room: more during rush hours and weekends
-base_waiting = 10
-hour_factor  = np.where(
-    (hour_of_day >= 8)  & (hour_of_day < 11), 15,   # morning rush
-    np.where(
-        (hour_of_day >= 18) & (hour_of_day < 22), 20,   # evening rush
-        np.where(hour_of_day < 6, -5, 5)                # quiet night
-    )
+# INCREASED RUSH HOUR BUSYNESS
+base_waiting = 8
+hour_factor = np.where(
+    (hour_of_day >= 9)  & (hour_of_day <= 13), 25,   # Morning rush (much busier now)
+    np.where((hour_of_day >= 18) & (hour_of_day <= 22), 35, # Evening rush (much busier now)
+    np.where((hour_of_day >= 14) & (hour_of_day <= 17), 15, # Afternoon steady
+    np.where(hour_of_day <= 6, -8, 0)))              # Deep night
 )
-weekend_waiting = is_weekend * 8
+weekend_waiting = is_weekend * 12
+
+# ADDED SEASONAL VOLUME (Winter flu season = more people waiting)
+seasonal_volume = np.where(season == "Winter", 15, np.where(season == "Summer", 5, 0))
 
 patients_in_waiting_room = clamp(
-    base_waiting + hour_factor + weekend_waiting
-    + np.random.randint(-5, 6, N_ROWS),
-    lo=0, hi=60
+    base_waiting + hour_factor + weekend_waiting + seasonal_volume + np.random.randint(-5, 6, N_ROWS),
+    lo=0, hi=100
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# 4.  TARGET VARIABLE: wait_time_minutes
-#
-#  Built from a linear combination of the features above + noise.
-#  Each coefficient reflects a realistic real-world relationship.
+# 4. TARGET VARIABLE: wait_time_minutes
 # ─────────────────────────────────────────────────────────────────────────────
 
-wait_time = (
-    # Intercept (baseline wait)
-    20.0
+# Step A: Minimum physical wait times.
+min_physical_wait = np.where(triage_level == 1, np.random.uniform(0, 2, N_ROWS),
+                    np.where(triage_level == 2, np.random.uniform(2, 5, N_ROWS),
+                    np.where(triage_level == 3, np.random.uniform(5, 10, N_ROWS),
+                    np.where(triage_level == 4, np.random.uniform(10, 15, N_ROWS),
+                                                np.random.uniform(15, 20, N_ROWS)))))
 
-    # Triage: level 1 = almost no wait, level 5 = long wait
-    + (triage_level - 1) * 12.0          # +0, +12, +24, +36, +48 min
+# Step B: Queue Pressure (NOW INCLUDES NURSES)
+# A nurse acts as a multiplier to doctor efficiency. We combine them into "effective staff"
+effective_staff = doctors_on_duty + (nurses_on_duty * 0.3) 
+queue_pressure = patients_in_waiting_room / effective_staff
 
-    # Crowding: each extra patient adds ~1.5 min
-    + patients_in_waiting_room * 1.5
+# Step C: Triage Queue Multiplier
+triage_multiplier = np.where(triage_level == 1, 0.0,
+                    np.where(triage_level == 2, 2.0,
+                    np.where(triage_level == 3, 6.0,
+                    np.where(triage_level == 4, 12.0, 18.0))))
 
-    # Staffing: each extra doctor reduces wait by ~8 min
-    - doctors_on_duty * 8.0
+base_queue_wait = queue_pressure * triage_multiplier
 
-    # Rush hours add extra time
-    + np.where(
-        (hour_of_day >= 8)  & (hour_of_day < 11), 15.0,
-        np.where(
-            (hour_of_day >= 18) & (hour_of_day < 22), 20.0,
-            0.0
-        )
-    )
+# Step D: Percentage-based multipliers for Age and Complaints
+age_multiplier = np.where(patient_age <= 5,  0.50,
+                 np.where(patient_age <= 12, 0.75,
+                 np.where(patient_age >= 75, 0.60,
+                 np.where(patient_age >= 65, 0.80, 1.0))))
 
-    # Weekends add ~10 min on average
-    + is_weekend * 10.0
-
-    # Elderly patients (>70) and very young (<5) slightly longer to process
-    + np.where(patient_age > 70, 5.0, 0.0)
-    + np.where(patient_age < 5,  5.0, 0.0)
-
-    # Cardiac / Neurological complaints tend to be seen faster
-    + np.where(np.isin(chief_complaint_category, ["Cardiac", "Neurological"]), -10.0, 0.0)
-
-    # Random noise: real ERs have lots of unmeasured variability
-    + np.random.normal(0, 10, N_ROWS)
+complaint_multiplier = np.where(
+    np.isin(chief_complaint_category, ["Cardiac", "Trauma"]), 0.3,
+    np.where(np.isin(chief_complaint_category, ["Respiratory", "Neurological"]), 0.7, 1.0)
 )
 
-# Clamp to realistic range: 1 min (immediate) to 240 min (4 hours)
-wait_time = clamp(np.round(wait_time, 1), lo=1.0, hi=240.0)
+# Step E: Operational Efficiency Penalty
+night_sluggishness = np.where((hour_of_day >= 23) | (hour_of_day <= 6), 1.6, 1.0)
+weekend_sluggishness = np.where(is_weekend == 1, 1.4, 1.0)
 
-# Rolling average wait in the last hour (simulated as noisy version of current wait)
-avg_wait_last_hour = clamp(
-    np.round(wait_time + np.random.normal(0, 8, N_ROWS), 1),
-    lo=1.0, hi=240.0
-)
+# SEASONAL EFFICIENCY (Winter means staff is dealing with contagious isolation rooms, slowing things down)
+winter_sluggishness = np.where(season == "Winter", 1.25, 1.0)
 
+efficiency_penalty = night_sluggishness * weekend_sluggishness * winter_sluggishness
+
+# Combine elements
+calculated_wait_time = min_physical_wait + (base_queue_wait * age_multiplier * complaint_multiplier * efficiency_penalty)
+
+# Add proportional noise
+noise = np.random.normal(0, 0.15 * calculated_wait_time, N_ROWS)
+wait_time = calculated_wait_time + noise
+
+# Cap at realistic max (8 hours)
+wait_time = clamp(np.round(wait_time, 1), lo=1.0, hi=480.0)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5.  ASSEMBLE DATAFRAME
+# 5. ASSEMBLE & SAVE
 # ─────────────────────────────────────────────────────────────────────────────
-
 df = pd.DataFrame({
-    # Temporal
     "hour_of_day":              hour_of_day,
     "day_of_week":              day_of_week,
     "is_weekend":               is_weekend,
     "month":                    month,
     "season":                   season,
-
-    # Patient
     "patient_age":              patient_age,
     "triage_level":             triage_level,
     "chief_complaint_category": chief_complaint_category,
-
-    # Operational
     "patients_in_waiting_room": patients_in_waiting_room,
     "doctors_on_duty":          doctors_on_duty,
     "nurses_on_duty":           nurses_on_duty,
-    "avg_wait_last_hour":       avg_wait_last_hour,
-
-    # Target
     "wait_time_minutes":        wait_time,
 })
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 6.  SAVE
-# ─────────────────────────────────────────────────────────────────────────────
-
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 df.to_csv(OUTPUT_FILE, index=False)
-
 print(f"✅  Dataset saved to: {OUTPUT_FILE}")
-print(f"    Shape: {df.shape}")
-print()
-print("── Target variable summary ─────────────────────────────")
-print(df["wait_time_minutes"].describe().round(1).to_string())
-print()
-print("── Feature preview (first 5 rows) ──────────────────────")
-print(df.head().to_string())

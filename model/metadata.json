@@ -31,19 +31,19 @@
   "target": "wait_time_minutes",
   "results": {
     "Linear Regression": {
-      "MAE": 8.9247,
-      "RMSE": 11.1863,
-      "R\u00b2": 0.8649
+      "MAE": 31.1771,
+      "RMSE": 49.1363,
+      "R\u00b2": 0.6264
     },
     "Decision Tree": {
-      "MAE": 9.6252,
-      "RMSE": 12.123,
-      "R\u00b2": 0.8413
+      "MAE": 20.7693,
+      "RMSE": 37.1025,
+      "R\u00b2": 0.787
     },
     "Random Forest": {
-      "MAE": 8.8329,
-      "RMSE": 11.0838,
-      "R\u00b2": 0.8673
+      "MAE": 15.513,
+      "RMSE": 29.1358,
+      "R\u00b2": 0.8686
     }
   }
 }

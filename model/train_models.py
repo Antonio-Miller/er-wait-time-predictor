@@ -37,7 +37,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics         import mean_absolute_error, mean_squared_error, r2_score
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DATA_PATH  = os.path.join("data", "dataset", "synthetic_er_data.csv")
+DATA_PATH  = os.path.join("data", "synthetic_er_data.csv")
 MODEL_DIR  = "model"
 PLOTS_DIR  = os.path.join(MODEL_DIR, "plots")
 MODEL_PATH = os.path.join(MODEL_DIR, "best_model.pkl")
