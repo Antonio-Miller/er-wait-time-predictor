@@ -122,6 +122,7 @@ st.markdown("""
   .result-label {
     font-size: 0.75rem;
     font-weight: 600;
+    color: #0a2540;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-top: 0.8rem;
@@ -178,6 +179,28 @@ st.markdown("""
     color: #1e40af;
     margin-top: 1rem;
   }
+            
+  .streamlit-expanderHeader {
+    background-color: white !important;
+    border-radius: 12px !important;
+    border: 1px solid #e8ecf4 !important;
+    color: #0a2540 !important; /* Header text color */
+  }
+
+  .streamlit-expanderContent {
+    background-color: white !important;
+    border: 1px solid #e8ecf4 !important;
+    border-top: none !important;
+    border-radius: 0 0 12px 12px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
+  }
+  
+  /* Make the "View Model Logic" text bold and dark */
+  .stExpander p {
+    color: #0a2540 !important;
+    font-weight: 500;
+  }
+            
 </style>
 """, unsafe_allow_html=True)
 
@@ -318,6 +341,8 @@ with right:
             "nurses_on_duty":           nurses_on_duty,
         }])
 
+        input_data['staff_to_patient_ratio'] = (input_data['doctors_on_duty'] + input_data['nurses_on_duty']) / (input_data['patients_in_waiting_room'] + 1)
+
         prediction = float(model.predict(input_data)[0])
         prediction = max(1.0, round(prediction, 1))
 
@@ -350,7 +375,7 @@ with right:
         res = metadata["results"]
         best = metadata["best_model_name"]
         mae  = res[best]["MAE"]
-        r2   = res[best]["R²"]
+        r2   = res[best]["R2"]
 
         st.markdown(f"""
         <div class="metric-row">
@@ -406,24 +431,21 @@ with right:
         for name, metrics in res.items():
             is_best = name == best
             prefix  = "🏆 " if is_best else "　 "
-            weight  = "font-weight:600" if is_best else "color:#64748b"
+            weight  = "font-weight:600; color:#1e40af" if is_best else "color:#64748b"
             st.markdown(
                 f'<div style="font-size:0.82rem;{weight};margin-bottom:0.4rem">'
-                f'{prefix}{name} &nbsp;·&nbsp; MAE {metrics["MAE"]} min &nbsp;·&nbsp; R² {metrics["R²"]}'
+                f'{prefix}{name} &nbsp;·&nbsp; MAE {metrics["MAE"]} min &nbsp;·&nbsp; R2 {metrics["R2"]}'
                 f'</div>',
                 unsafe_allow_html=True
             )
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Explainable AI Consulting Feature
+       # Explainable AI Consulting Feature
         with st.expander("📊 View Model Logic (Feature Importance)"):
-            st.markdown(
-                "This chart shows which factors our Random Forest heavily relies on "
-                "to calculate the wait time."
-            )
+            st.write("This chart shows which factors our Random Forest heavily relies on to calculate the wait time.")
+            
             plot_path = os.path.join(BASE_DIR, "..", "model", "plots", "feature_importance.png")
             if os.path.exists(plot_path):
-                # FIX: Replaced use_container_width with width="stretch" to stop terminal warnings
-                st.image(plot_path, width="stretch") 
+                st.image(plot_path, width="stretch")
             else:
-                st.info("Feature importance plot not found. Run train_models.py first to generate it.")
+                st.info("Feature importance plot not found.")

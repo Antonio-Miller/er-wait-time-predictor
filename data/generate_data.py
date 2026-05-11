@@ -147,4 +147,4 @@ df = pd.DataFrame({
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 df.to_csv(OUTPUT_FILE, index=False)
-print(f"✅  Dataset saved to: {OUTPUT_FILE}")
+print(f" Dataset saved to: {OUTPUT_FILE}")

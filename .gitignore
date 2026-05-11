@@ -6,6 +6,8 @@ __pycache__/
 .Python
 *.egg
 *.egg-info/
+*.pkl
+*.pyc
 dist/
 build/
 eggs/

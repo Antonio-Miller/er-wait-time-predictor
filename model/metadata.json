@@ -9,7 +9,8 @@
     "triage_level",
     "patients_in_waiting_room",
     "doctors_on_duty",
-    "nurses_on_duty"
+    "nurses_on_duty",
+    "staff_to_patient_ratio"
   ],
   "categorical_features": [
     "season",
@@ -26,24 +27,35 @@
     "doctors_on_duty",
     "nurses_on_duty",
     "season",
-    "chief_complaint_category"
+    "chief_complaint_category",
+    "staff_to_patient_ratio"
   ],
   "target": "wait_time_minutes",
+  "baseline_mae": 52.2136,
   "results": {
     "Linear Regression": {
-      "MAE": 31.1771,
-      "RMSE": 49.1363,
-      "R\u00b2": 0.6264
+      "MAE": 31.1739,
+      "RMSE": 49.1339,
+      "R2": 0.6264,
+      "CV_MAE": 31.0586,
+      "CV_STD": 0.7385,
+      "improvement_pct": 40.3
     },
     "Decision Tree": {
-      "MAE": 20.7693,
-      "RMSE": 37.1025,
-      "R\u00b2": 0.787
+      "MAE": 17.131,
+      "RMSE": 31.4945,
+      "R2": 0.8465,
+      "CV_MAE": 17.9582,
+      "CV_STD": 0.7684,
+      "improvement_pct": 67.19
     },
     "Random Forest": {
-      "MAE": 15.513,
-      "RMSE": 29.1358,
-      "R\u00b2": 0.8686
+      "MAE": 13.7494,
+      "RMSE": 25.8835,
+      "R2": 0.8963,
+      "CV_MAE": 14.3086,
+      "CV_STD": 0.6134,
+      "improvement_pct": 73.67
     }
   }
 }
