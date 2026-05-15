@@ -1,43 +1,15 @@
 """
 generate_data.py
 ================
-Synthetic ER Wait Time data generator — v4.
+Synthetic ER Wait Time data generator — v5.
 
-Fixes over v3
--------------
-- Child / elderly priority now produces a visible, concrete time reduction
-  (direct minute subtraction + fraction shift, not fraction only).
-- Rush hours 07–10 and 17–20 are unambiguously the two highest peaks.
-  Midnight spike is capped so it never exceeds the evening peak.
-- Triage 1 base wait is 1–5 min (realistic first-response time).
-  Still bypasses queue and overhead entirely.
-
-Core model rules
-----------------
-1.  TRIAGE 1 & 2 bypass the queue entirely.
-    Overhead (night/weekend/winter) does NOT apply to them.
-    Triage 1: 1–5 min (physical response + first assessment).
-    Triage 2: 5–12 min.
-
-2.  TRIAGE 3–5 wait in queue.
-    wait = triage_base
-         + mm_c_queue_wait × effective_priority
-         - age_direct_reduction          ← concrete minutes saved
-         + operational_overhead
-         + noise
-
-3.  CHIEF COMPLAINT shifts priority fraction for triage 3+ patients.
-
-4.  AGE PRIORITY does two things for triage 3+:
-    a) Shifts priority fraction (queue position).
-    b) Subtracts a direct number of minutes (concrete fast-track benefit).
-
-5.  RUSH HOURS (in order of severity):
-      17:00–20:00  evening PEAK    ×3.0
-      07:00–10:00  morning surge   ×2.2
-      22:00–00:00  late evening    ×1.5
-      00:00–02:00  midnight spike  ×1.3  (capped — staff ratio holds)
-      03:00–06:00  deep quiet      ×0.20
+Design goals
+------------
+- Weekends and peak hours (08–10 and 17–19) should increase wait times.
+- Age should have a realistic U-shaped effect:
+    very young and elderly patients wait slightly longer on average.
+- Directional relationships should be stable enough that a model learns
+    intuitive weights for day/time/age features.
 """
 
 import numpy as np
@@ -76,7 +48,35 @@ month_cos = np.cos(2 * np.pi * month / 12)
 # 2.  PATIENT FEATURES
 # ─────────────────────────────────────────────────────────────────────────────
 
-patient_age = rng.integers(1, 101, N_ROWS)
+# Realistic ER age mix: mostly adults, fewer very young children and elderly.
+age_group = rng.choice(
+    ["young_child", "child_teen", "adult", "older_adult", "elderly"],
+    size=N_ROWS,
+    p=[0.05, 0.13, 0.50, 0.22, 0.10],
+)
+
+patient_age = np.empty(N_ROWS, dtype=int)
+
+mask = age_group == "young_child"
+patient_age[mask] = rng.integers(0, 6, np.sum(mask))
+
+mask = age_group == "child_teen"
+patient_age[mask] = rng.integers(6, 18, np.sum(mask))
+
+mask = age_group == "adult"
+patient_age[mask] = np.round(
+    clamp(rng.normal(37, 12, np.sum(mask)), 18, 64)
+).astype(int)
+
+mask = age_group == "older_adult"
+patient_age[mask] = np.round(
+    clamp(rng.normal(58, 7, np.sum(mask)), 45, 74)
+).astype(int)
+
+mask = age_group == "elderly"
+patient_age[mask] = np.round(
+    clamp(rng.normal(80, 7, np.sum(mask)), 70, 100)
+).astype(int)
 
 triage_level = rng.choice(
     [1, 2, 3, 4, 5],
@@ -117,7 +117,7 @@ nurses_on_duty = clamp(np.round(nurse_base).astype(int), 2, 16)
 # 4.  ARRIVAL RATE  λ  (patients / hour)
 #
 #     Peak order (intentional):
-#       17–20h  ×3.0  >  07–10h  ×2.2  >  22–00h  ×1.5  >  00–02h  ×1.3
+#       17–20h  ×3.0  >  07–10h  ×2.2  >  22–00h  ×1.25 >  00–02h  ×1.0
 #     Deep quiet 03–06h  ×0.20
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -133,7 +133,7 @@ hour_mult = np.select(
         (hour_of_day >= 21) & (hour_of_day <= 23),   # late evening
         (hour_of_day >= 0)  & (hour_of_day <= 2),    # midnight spike (capped)
     ],
-    [0.20, 2.20, 1.10, 1.50, 3.00, 1.50, 1.30],
+    [0.20, 2.20, 1.10, 1.50, 3.00, 1.25, 1.00],
     default=1.00,
 )
 
@@ -160,7 +160,7 @@ lam = clamp(lam, 0.5, 45.0)
 
 MU_PER_DOC = 2.4
 
-night_factor  = np.where((hour_of_day >= 23) | (hour_of_day <= 6), 0.75, 1.00)
+night_factor  = np.where((hour_of_day >= 23) | (hour_of_day <= 6), 0.82, 1.00)
 winter_factor = np.where(np.isin(month, [12, 1, 2]), 0.88, 1.00)
 mu_per_doc    = MU_PER_DOC * night_factor * winter_factor
 
@@ -275,65 +275,48 @@ complaint_pf_adj = np.where(triage_level <= 2, 0.0, complaint_pf_adj)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 11. AGE PRIORITY
+# 11. AGE COMPLEXITY EFFECT
 #
-#     Two-part effect for triage 3+ patients:
-#     a) Priority fraction shift  → better queue position
-#     b) Direct minute reduction  → concrete fast-track benefit
-#        (e.g. a 5-year-old skips the 20-min wait for a triage bay)
-#
-#     Neither applies to triage 1–2 (already bypassing queue).
+#     U-shaped relationship for triage 3+:
+#       - very young and elderly patients tend to require more attention,
+#         so they get a modest positive wait-time penalty.
+#       - middle-aged adults have minimal age-related overhead.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# a) Queue position shift
-age_pf_adj = np.where(
-    patient_age <= 5,  -0.25,
-    np.where(
-        patient_age <= 12, -0.15,
-        np.where(
-            patient_age >= 75, -0.20,
-            np.where(
-                patient_age >= 65, -0.10,
-                0.00,
-            ),
-        ),
-    ),
-)
-age_pf_adj = np.where(triage_level <= 2, 0.0, age_pf_adj)
+effective_priority = clamp(priority_fraction + complaint_pf_adj, 0.0, 1.0)
 
-effective_priority = clamp(
-    priority_fraction + complaint_pf_adj + age_pf_adj, 0.0, 1.0
-)
-
-# b) Direct minute reduction (fast-track protocol time saved)
-#    Applied to triage 3–5 only; proportional to how busy the ER is
-#    so the benefit is visible even at low queue pressure.
-age_direct_reduction = np.where(
-    patient_age <= 5,  rng.uniform(18, 28, N_ROWS),   # paediatric fast-track
+age_wait_penalty = np.where(
+    patient_age < 5,  rng.uniform(6, 12, N_ROWS),
     np.where(
-        patient_age <= 12, rng.uniform(10, 18, N_ROWS),
+        patient_age <= 12, rng.uniform(2, 6, N_ROWS),
         np.where(
-            patient_age >= 75, rng.uniform(15, 25, N_ROWS),  # frailty protocol
+            patient_age > 70, rng.uniform(5, 10, N_ROWS),
             np.where(
-                patient_age >= 65, rng.uniform(8,  15, N_ROWS),
+                patient_age >= 60, rng.uniform(2, 5, N_ROWS),
                 0.0,
             ),
         ),
     ),
 )
-age_direct_reduction = np.where(triage_level <= 2, 0.0, age_direct_reduction)
+age_wait_penalty = np.where(triage_level <= 2, 0.0, age_wait_penalty)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 12. OPERATIONAL OVERHEAD  (triage 3–5 only)
 # ─────────────────────────────────────────────────────────────────────────────
 
-night_overhead   = np.where((hour_of_day >= 23) | (hour_of_day <= 6), 10.0, 0.0)
-weekend_overhead = np.where(is_weekend == 1, 14.0, 0.0)
-winter_overhead  = np.where(np.isin(month, [12, 1, 2]),  9.0, 0.0)
+night_overhead   = np.where((hour_of_day >= 23) | (hour_of_day <= 6), 7.0, 0.0)
+weekend_overhead = np.where(is_weekend == 1, 16.0, 0.0)
+winter_overhead  = np.where(np.isin(month, [12, 1, 2]),  8.0, 0.0)
+peak_overhead    = np.where(
+    ((hour_of_day >= 8) & (hour_of_day <= 10))
+    | ((hour_of_day >= 17) & (hour_of_day <= 19)),
+    12.0,
+    0.0,
+)
 
 operational_overhead = (
-    (night_overhead + weekend_overhead + winter_overhead)
+    (night_overhead + weekend_overhead + winter_overhead + peak_overhead)
     * np.where(triage_level <= 2, 0.0, 1.0)
 )
 
@@ -344,7 +327,7 @@ operational_overhead = (
 #     Triage 1–2:  triage_base + tiny noise
 #     Triage 3–5:  triage_base
 #                + mm_c_queue_wait × effective_priority
-#                - age_direct_reduction
+#                + age_wait_penalty
 #                + operational_overhead
 #                + noise
 # ─────────────────────────────────────────────────────────────────────────────
@@ -363,7 +346,7 @@ wait_time = clamp(
             triage_level <= 2,
             0.0,
             mm_c_wait_minutes * effective_priority
-            - age_direct_reduction
+            + age_wait_penalty
             + operational_overhead,
         )
         + noise,
@@ -432,14 +415,14 @@ print("\n─── Mean wait by chief complaint ──────────�
 print(df.groupby("chief_complaint_category")["wait_time_minutes"]
       .mean().round(1).sort_values())
 
-print("\n─── Age priority check (triage 3–5 only) ────────────")
+print("\n─── Age effect check (triage 3–5 only) ──────────────")
 t35 = df[df["triage_level"] >= 3]
 age_groups = {
-    "Under 6":  t35[t35["patient_age"] <= 5],
-    "6–12":     t35[(t35["patient_age"] > 5)  & (t35["patient_age"] <= 12)],
-    "13–64":    t35[(t35["patient_age"] > 12) & (t35["patient_age"] < 65)],
-    "65–74":    t35[(t35["patient_age"] >= 65) & (t35["patient_age"] < 75)],
-    "75+":      t35[t35["patient_age"] >= 75],
+    "Under 5":  t35[t35["patient_age"] < 5],
+    "5–17":     t35[(t35["patient_age"] >= 5)  & (t35["patient_age"] <= 17)],
+    "18–59":    t35[(t35["patient_age"] >= 18) & (t35["patient_age"] < 60)],
+    "60–70":    t35[(t35["patient_age"] >= 60) & (t35["patient_age"] <= 70)],
+    "71+":      t35[t35["patient_age"] > 70],
 }
 for label, grp in age_groups.items():
     print(f"  {label:8s}  mean={grp['wait_time_minutes'].mean():.1f} min  n={len(grp)}")

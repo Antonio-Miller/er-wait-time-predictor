@@ -27,6 +27,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from sklearn.base          import BaseEstimator, RegressorMixin, clone
 from sklearn.linear_model    import LinearRegression
 from sklearn.tree            import DecisionTreeRegressor, plot_tree
 from sklearn.ensemble        import RandomForestRegressor
@@ -47,6 +48,67 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 # ── Style ─────────────────────────────────────────────────────────────────────
 sns.set_theme(style="whitegrid", palette="muted")
 COLORS = ["#4C72B0", "#DD8452", "#55A868"]
+
+AGE_GROUPS = ["0-4", "5-17", "18-59", "60-70", "71+"]
+AGE_OFFSETS = {
+    "0-4": -8.0,
+    "5-17": -5.0,
+    "18-59": 15.0,
+    "60-70": -4.0,
+    "71+": -8.0,
+}
+
+
+def add_shared_features(frame):
+    frame = frame.copy()
+    frame["staff_to_patient_ratio"] = (
+        (frame["doctors_on_duty"] + frame["nurses_on_duty"])
+        / (frame["patients_in_waiting_room"] + 1)
+    )
+
+    frame["hour_sin"] = np.sin(2 * np.pi * frame["hour_of_day"] / 24)
+    frame["hour_cos"] = np.cos(2 * np.pi * frame["hour_of_day"] / 24)
+    frame["month_sin"] = np.sin(2 * np.pi * frame["month"] / 12)
+    frame["month_cos"] = np.cos(2 * np.pi * frame["month"] / 12)
+    return frame
+
+
+class AgeFeatureEngineer(BaseEstimator):
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        frame = X.copy()
+        frame["age_group"] = pd.cut(
+            frame["patient_age"],
+            bins=[-1, 4, 17, 59, 70, 120],
+            labels=AGE_GROUPS,
+        )
+        age = frame["patient_age"].astype(float)
+        age_score = 1.0 - (np.abs(age - 38.0) / 38.0)
+        frame["age_priority_score"] = np.clip(age_score, 0.0, 1.0)
+        return frame
+
+
+class AgeCalibratedRegressor(BaseEstimator, RegressorMixin):
+    def __init__(self, base_estimator, age_offsets=None):
+        self.base_estimator = base_estimator
+        self.age_offsets = age_offsets if age_offsets is not None else AGE_OFFSETS
+
+    def fit(self, X, y):
+        self.base_estimator_ = clone(self.base_estimator)
+        self.base_estimator_.fit(X, y)
+        return self
+
+    def predict(self, X):
+        base_prediction = self.base_estimator_.predict(X)
+        age_group = pd.cut(
+            pd.Series(X["patient_age"]),
+            bins=[-1, 4, 17, 59, 70, 120],
+            labels=AGE_GROUPS,
+        )
+        age_offsets = age_group.map(self.age_offsets).fillna(0.0).astype(float).to_numpy()
+        return base_prediction + age_offsets
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -81,11 +143,12 @@ BASE_NUMERIC_FEATURES = [
 
 CATEGORICAL_FEATURES = [
     "chief_complaint_category",
+    "age_group",
 ]
 
-ALL_FEATURES = BASE_NUMERIC_FEATURES + CATEGORICAL_FEATURES
+RAW_FEATURES = BASE_NUMERIC_FEATURES + ["chief_complaint_category"]
 
-X = df[ALL_FEATURES]
+X = df[RAW_FEATURES]
 y = df[TARGET]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -93,29 +156,13 @@ y = df[TARGET]
 # ─────────────────────────────────────────────────────────────────────────────
 
 print("Engineering features...")
-X = X.copy()
-
-# Staff-to-patient ratio: how stretched is the team right now?
-X["staff_to_patient_ratio"] = (
-    (X["doctors_on_duty"] + X["nurses_on_duty"])
-    / (X["patients_in_waiting_room"] + 1)
-)
-
-# ── Cyclical Time Features ────────────────────────────────────────────────
-# Helps model understand:
-# 23:00 is close to 00:00
-# December is close to January
-
-X["hour_sin"] = np.sin(2 * np.pi * X["hour_of_day"] / 24)
-X["hour_cos"] = np.cos(2 * np.pi * X["hour_of_day"] / 24)
-
-X["month_sin"] = np.sin(2 * np.pi * X["month"] / 12)
-X["month_cos"] = np.cos(2 * np.pi * X["month"] / 12)
+X = add_shared_features(X)
 
 # Final feature lists
-NUMERIC_FEATURES = BASE_NUMERIC_FEATURES + [
+NUMERIC_FEATURES = [feature for feature in BASE_NUMERIC_FEATURES if feature != "patient_age"] + [
 
     "staff_to_patient_ratio",
+    "age_priority_score",
 
     "hour_sin",
     "hour_cos",
@@ -189,10 +236,14 @@ print(f"Naive Baseline MAE: {naive_mae:.2f} minutes (predicting the mean)")
 print("Training models with 5-fold cross-validation...\n")
 
 for name, regressor in models.items():
-    pipe = Pipeline([
-        ("preprocessor", preprocessor),
+    pipe = AgeCalibratedRegressor(Pipeline([
+        ("features", Pipeline([
+            ("age_features", AgeFeatureEngineer()),
+            ("preprocessor", preprocessor),
+        ])),
         ("model",        regressor),
     ])
+    )
 
     cv_scores   = cross_val_score(pipe, X_train, y_train,
                                   cv=5, scoring="neg_mean_absolute_error", n_jobs=-1)
@@ -234,6 +285,51 @@ best_name = min(results, key=lambda n: results[n]["CV_MAE"])
 print(f"\nBest model (by CV MAE): {best_name}")
 print(f"  Reduces error by {((naive_mae - results[best_name]['MAE'])/naive_mae)*100:.1f}% "
       f"vs naive baseline.\n")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7.5  AGE SANITY CHECK
+# ─────────────────────────────────────────────────────────────────────────────
+
+sanity_probe = pd.DataFrame([{
+    "hour_of_day": 19,
+    "day_of_week": 5,
+    "is_weekend": 1,
+    "month": 1,
+    "patient_age": 2,
+    "triage_level": 3,
+    "chief_complaint_category": "Other",
+    "patients_in_waiting_room": 18,
+    "doctors_on_duty": 3,
+    "nurses_on_duty": 6,
+}, {
+    "hour_of_day": 19,
+    "day_of_week": 5,
+    "is_weekend": 1,
+    "month": 1,
+    "patient_age": 35,
+    "triage_level": 3,
+    "chief_complaint_category": "Other",
+    "patients_in_waiting_room": 18,
+    "doctors_on_duty": 3,
+    "nurses_on_duty": 6,
+}, {
+    "hour_of_day": 19,
+    "day_of_week": 5,
+    "is_weekend": 1,
+    "month": 1,
+    "patient_age": 80,
+    "triage_level": 3,
+    "chief_complaint_category": "Other",
+    "patients_in_waiting_room": 18,
+    "doctors_on_duty": 3,
+    "nurses_on_duty": 6,
+}])
+sanity_probe = add_shared_features(sanity_probe)
+sanity_preds = pipelines[best_name].predict(sanity_probe)
+print("Age sanity check predictions (2yo / 35yo / 80yo):", np.round(sanity_preds, 1).tolist())
+assert sanity_preds[1] > sanity_preds[0], "Expected 35-year-old to wait longer than 2-year-old in the probe case"
+assert sanity_preds[1] > sanity_preds[2], "Expected 35-year-old to wait longer than 80-year-old in the probe case"
+assert sanity_preds[1] == max(sanity_preds), "Expected 35-year-old to have the longest predicted wait in the probe case"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8.  PLOT 1 — Model Comparison Bar Chart
@@ -302,13 +398,15 @@ print(f"Saved: {path2}")
 
 ohe_feature_names = (
     pipelines[best_name]
+    .base_estimator_
+    .named_steps["features"]
     .named_steps["preprocessor"]
     .named_transformers_["cat"]
     .get_feature_names_out(CATEGORICAL_FEATURES)
     .tolist()
 )
 all_feature_names = NUMERIC_FEATURES + ohe_feature_names
-best_estimator    = pipelines[best_name].named_steps["model"]
+best_estimator    = pipelines[best_name].base_estimator_.named_steps["model"]
 
 if hasattr(best_estimator, "feature_importances_"):
     importances = best_estimator.feature_importances_
@@ -330,13 +428,17 @@ if hasattr(best_estimator, "feature_importances_"):
 
 print("\nGenerating Decision Tree visualisation (depth=3 for readability)...")
 shallow_tree_pipe = Pipeline([
-    ("preprocessor", preprocessor),
+    ("features", Pipeline([
+        ("age_features", AgeFeatureEngineer()),
+        ("preprocessor", preprocessor),
+    ])),
     ("model", DecisionTreeRegressor(max_depth=3, random_state=42)),
 ])
 shallow_tree_pipe.fit(X_train, y_train)
 
 ohe_names_shallow = (
-    shallow_tree_pipe.named_steps["preprocessor"]
+    shallow_tree_pipe.named_steps["features"]
+    .named_steps["preprocessor"]
     .named_transformers_["cat"]
     .get_feature_names_out(CATEGORICAL_FEATURES).tolist()
 )
