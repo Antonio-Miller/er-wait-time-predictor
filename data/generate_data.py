@@ -275,30 +275,29 @@ complaint_pf_adj = np.where(triage_level <= 2, 0.0, complaint_pf_adj)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 11. AGE COMPLEXITY EFFECT
+# 11. AGE PRIORITY EFFECT
 #
-#     U-shaped relationship for triage 3+:
-#       - very young and elderly patients tend to require more attention,
-#         so they get a modest positive wait-time penalty.
-#       - middle-aged adults have minimal age-related overhead.
+#     Priority relationship for triage 3+:
+#       - minors and elderly are prioritized and get modest wait reductions.
+#       - typical adults (18-59) are baseline queue population and wait longer.
 # ─────────────────────────────────────────────────────────────────────────────
 
 effective_priority = clamp(priority_fraction + complaint_pf_adj, 0.0, 1.0)
 
-age_wait_penalty = np.where(
-    patient_age < 5,  rng.uniform(6, 12, N_ROWS),
+age_wait_adjustment = np.where(
+    patient_age < 5,  -rng.uniform(8, 14, N_ROWS),
     np.where(
-        patient_age <= 12, rng.uniform(2, 6, N_ROWS),
+        patient_age <= 17, -rng.uniform(4, 8, N_ROWS),
         np.where(
-            patient_age > 70, rng.uniform(5, 10, N_ROWS),
+            patient_age > 70, -rng.uniform(6, 11, N_ROWS),
             np.where(
-                patient_age >= 60, rng.uniform(2, 5, N_ROWS),
-                0.0,
+                patient_age >= 60, -rng.uniform(3, 6, N_ROWS),
+                rng.uniform(5, 10, N_ROWS),
             ),
         ),
     ),
 )
-age_wait_penalty = np.where(triage_level <= 2, 0.0, age_wait_penalty)
+age_wait_adjustment = np.where(triage_level <= 2, 0.0, age_wait_adjustment)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -327,7 +326,7 @@ operational_overhead = (
 #     Triage 1–2:  triage_base + tiny noise
 #     Triage 3–5:  triage_base
 #                + mm_c_queue_wait × effective_priority
-#                + age_wait_penalty
+#                + age_wait_adjustment
 #                + operational_overhead
 #                + noise
 # ─────────────────────────────────────────────────────────────────────────────
@@ -346,7 +345,7 @@ wait_time = clamp(
             triage_level <= 2,
             0.0,
             mm_c_wait_minutes * effective_priority
-            + age_wait_penalty
+            + age_wait_adjustment
             + operational_overhead,
         )
         + noise,

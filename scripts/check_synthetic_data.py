@@ -7,7 +7,7 @@ The script regenerates the dataset and checks that the synthetic labels follow
 intuitive healthcare patterns:
 - weekends have longer waits than weekdays
 - peak hours have longer waits than non-peak hours
-- very young and elderly patients wait slightly longer than typical adults
+- very young and elderly patients are prioritized and wait less than typical adults
 """
 
 from __future__ import annotations
@@ -95,34 +95,34 @@ def main() -> None:
         assert peak_weekend.mean() > peak_weekday.mean(), "Peak weekend mean should be > peak weekday mean"
         assert p_pk < 0.05, f"Peak weekend vs weekday not significant (p={p_pk:.3f})"
 
-    # --- Age U-shape checks ------------------------------------------
+    # --- Age-priority checks -----------------------------------------
     age_bins = pd.cut(
         df["patient_age"],
         bins=[-1, 4, 17, 59, 70, 120],
         labels=["0-4", "5-17", "18-59", "60-70", "71+"],
     )
     age_means = df.groupby(age_bins, observed=False)["wait_time_minutes"].mean()
-    # U-shape: groups surrounding 18-59 should be >= middle group
-    assert age_means["0-4"] >= age_means["18-59"], "0-4 not >= 18-59"
-    assert age_means["5-17"] >= age_means["18-59"], "5-17 not >= 18-59"
-    assert age_means["60-70"] >= age_means["18-59"], "60-70 not >= 18-59"
-    assert age_means["71+"] >= age_means["18-59"], "71+ not >= 18-59"
+    # Priority pattern: all non-adult groups should wait less than adults (18-59)
+    assert age_means["0-4"] <= age_means["18-59"], "0-4 not <= 18-59"
+    assert age_means["5-17"] <= age_means["18-59"], "5-17 not <= 18-59"
+    assert age_means["60-70"] <= age_means["18-59"], "60-70 not <= 18-59"
+    assert age_means["71+"] <= age_means["18-59"], "71+ not <= 18-59"
 
     # Age effect consistency across weekday/weekend
     for lbl in ["0-4", "5-17", "60-70", "71+"]:
         a_weekend = df[(age_bins == lbl) & (df["is_weekend"] == 1)]["wait_time_minutes"]
         a_weekday = df[(age_bins == lbl) & (df["is_weekend"] == 0)]["wait_time_minutes"]
-        # if both sides have enough samples, ensure group mean is >= adult mean for that day type
+        # if both sides have enough samples, ensure group mean is <= adult mean for that day type
         if len(a_weekend) >= 30 and len(a_weekday) >= 30:
             adult_weekend = df[(age_bins == "18-59") & (df["is_weekend"] == 1)]["wait_time_minutes"]
             adult_weekday = df[(age_bins == "18-59") & (df["is_weekend"] == 0)]["wait_time_minutes"]
             if len(adult_weekend) > 0 and len(a_weekend) > 0:
-                assert a_weekend.mean() >= adult_weekend.mean() - 1e-6, (
-                    f"Age group {lbl} on weekends has mean < adult mean on weekends"
+                assert a_weekend.mean() <= adult_weekend.mean() + 1e-6, (
+                    f"Age group {lbl} on weekends has mean > adult mean on weekends"
                 )
             if len(adult_weekday) > 0 and len(a_weekday) > 0:
-                assert a_weekday.mean() >= adult_weekday.mean() - 1e-6, (
-                    f"Age group {lbl} on weekdays has mean < adult mean on weekdays"
+                assert a_weekday.mean() <= adult_weekday.mean() + 1e-6, (
+                    f"Age group {lbl} on weekdays has mean > adult mean on weekdays"
                 )
 
     # --- Summary table output ---------------------------------------

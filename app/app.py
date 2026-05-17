@@ -4,7 +4,7 @@ Streamlit UI: clean, calm, fast to operate under pressure.
 Run:  streamlit run app/app.py
 """
 
-import os, json
+import os, json, sys
 import joblib
 import numpy as np
 import pandas as pd
@@ -178,8 +178,12 @@ label, .stSelectbox label, .stNumberInput label {
 
 # ── Load model & metadata ─────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR   = os.path.abspath(os.path.join(BASE_DIR, ".."))
 MODEL_PATH = os.path.join(BASE_DIR, "..", "model", "best_model.pkl")
 META_PATH  = os.path.join(BASE_DIR, "..", "model", "metadata.json")
+
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 @st.cache_resource
 def load_model():
