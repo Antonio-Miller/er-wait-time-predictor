@@ -39,31 +39,31 @@
     "age_group"
   ],
   "target": "wait_time_minutes",
-  "baseline_mae": 50.6661,
+  "baseline_mae": 28.3115,
   "results": {
     "Linear Regression": {
-      "MAE": 23.0189,
-      "RMSE": 35.8005,
-      "R2": 0.7374,
-      "CV_MAE": 24.3785,
-      "CV_STD": 0.6547,
-      "improvement_pct": 54.57
+      "MAE": 12.2648,
+      "RMSE": 17.3589,
+      "R2": 0.7829,
+      "CV_MAE": 12.7121,
+      "CV_STD": 0.2664,
+      "improvement_pct": 56.68
     },
     "Decision Tree": {
-      "MAE": 14.5692,
-      "RMSE": 24.9275,
-      "R2": 0.8727,
-      "CV_MAE": 15.5491,
-      "CV_STD": 0.2618,
-      "improvement_pct": 71.24
+      "MAE": 10.519,
+      "RMSE": 15.2241,
+      "R2": 0.833,
+      "CV_MAE": 10.8524,
+      "CV_STD": 0.1323,
+      "improvement_pct": 62.85
     },
     "Random Forest": {
-      "MAE": 12.6458,
-      "RMSE": 22.1533,
-      "R2": 0.8994,
-      "CV_MAE": 13.9788,
-      "CV_STD": 0.3578,
-      "improvement_pct": 75.04
+      "MAE": 8.7175,
+      "RMSE": 12.9112,
+      "R2": 0.8799,
+      "CV_MAE": 9.255,
+      "CV_STD": 0.0594,
+      "improvement_pct": 69.21
     }
   }
 }

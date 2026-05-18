@@ -236,7 +236,7 @@ triage_base = np.where(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9.  PRIORITY FRACTION  (queue position, triage 3–5 only)
+# 9.  PRIORITY FRACTION  (queue position, triage 2–5)
 # ─────────────────────────────────────────────────────────────────────────────
 
 priority_fraction = np.where(
@@ -244,10 +244,10 @@ priority_fraction = np.where(
     np.where(
         triage_level == 2, 0.05,
         np.where(
-            triage_level == 3, 0.38,
+            triage_level == 3, 0.15,
             np.where(
-                triage_level == 4, 0.72,
-                1.00,
+                triage_level == 4, 0.25,
+                0.35,
             ),
         ),
     ),
@@ -255,7 +255,7 @@ priority_fraction = np.where(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 10. COMPLAINT ADJUSTMENT TO PRIORITY FRACTION (triage 3+ only)
+# 10. COMPLAINT ADJUSTMENT TO PRIORITY FRACTION (triage 2+ only)
 # ─────────────────────────────────────────────────────────────────────────────
 
 complaint_pf_adj = np.where(
@@ -271,13 +271,13 @@ complaint_pf_adj = np.where(
         ),
     ),
 )
-complaint_pf_adj = np.where(triage_level <= 2, 0.0, complaint_pf_adj)
+complaint_pf_adj = np.where(triage_level == 1, 0.0, complaint_pf_adj)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. AGE PRIORITY EFFECT
 #
-#     Priority relationship for triage 3+:
+#     Priority relationship for triage 2+:
 #       - minors and elderly are prioritized and get modest wait reductions.
 #       - typical adults (18-59) are baseline queue population and wait longer.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -297,11 +297,11 @@ age_wait_adjustment = np.where(
         ),
     ),
 )
-age_wait_adjustment = np.where(triage_level <= 2, 0.0, age_wait_adjustment)
+age_wait_adjustment = np.where(triage_level == 1, 0.0, age_wait_adjustment)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 12. OPERATIONAL OVERHEAD  (triage 3–5 only)
+# 12. OPERATIONAL OVERHEAD  (triage 2–5)
 # ─────────────────────────────────────────────────────────────────────────────
 
 night_overhead   = np.where((hour_of_day >= 23) | (hour_of_day <= 6), 7.0, 0.0)
@@ -316,15 +316,15 @@ peak_overhead    = np.where(
 
 operational_overhead = (
     (night_overhead + weekend_overhead + winter_overhead + peak_overhead)
-    * np.where(triage_level <= 2, 0.0, 1.0)
+    * np.where(triage_level == 1, 0.0, 1.0)
 )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 13. FINAL WAIT TIME
 #
-#     Triage 1–2:  triage_base + tiny noise
-#     Triage 3–5:  triage_base
+#     Triage 1:    triage_base + tiny noise
+#     Triage 2–5:  triage_base
 #                + mm_c_queue_wait × effective_priority
 #                + age_wait_adjustment
 #                + operational_overhead
@@ -332,7 +332,7 @@ operational_overhead = (
 # ─────────────────────────────────────────────────────────────────────────────
 
 noise_scale = np.where(
-    triage_level <= 2,
+    triage_level == 1,
     1.2,
     np.maximum(4.0, triage_base * 0.12),
 )
@@ -342,7 +342,7 @@ wait_time = clamp(
     np.round(
         triage_base
         + np.where(
-            triage_level <= 2,
+            triage_level == 1,
             0.0,
             mm_c_wait_minutes * effective_priority
             + age_wait_adjustment
