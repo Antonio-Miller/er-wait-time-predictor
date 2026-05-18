@@ -49,7 +49,9 @@ We are **not** building a full hospital system. We are building:
 - **ML Task:** Regression (predicting a continuous number — minutes)
 - **Target Variable:** `wait_time_minutes`
 
-### The Feature Set (11 Features)
+### The Feature Set (Input Features)
+
+These are the raw features fed into the model. Additional engineered features are derived from these during preprocessing.
 
 | Feature | Description | Type |
 |---|---|---|
@@ -57,13 +59,24 @@ We are **not** building a full hospital system. We are building:
 | `day_of_week` | Monday=0, Sunday=6 | Numerical |
 | `is_weekend` | 1 if Saturday or Sunday | Boolean |
 | `month` | Month of the year (1–12) | Numerical |
-| `season` | Spring/Summer/Autumn/Winter | Categorical |
 | `patient_age` | Age of the patient | Numerical |
 | `triage_level` | Urgency level 1 (critical) to 5 (minor) | Numerical |
-| `chief_complaint_category` | Type of complaint (trauma, cardiac, etc.) | Categorical |
+| `chief_complaint_category` | Type of complaint (Trauma, Cardiac, etc.) | Categorical |
 | `patients_in_waiting_room` | How many people are currently waiting | Numerical |
 | `doctors_on_duty` | Number of doctors currently working | Numerical |
 | `nurses_on_duty` | Number of nurses currently working | Numerical |
+
+### Engineered Features (derived automatically during training and prediction)
+
+| Feature | How it's computed |
+|---|---|
+| `staff_to_patient_ratio` | `(doctors + nurses) / (waiting_room + 1)` |
+| `age_priority_score` | Captures U-shaped priority (children and elderly prioritised) |
+| `hour_sin` / `hour_cos` | Circular encoding of hour so 23:00 and 00:00 are treated as close |
+| `month_sin` / `month_cos` | Circular encoding of month for seasonality |
+| `age_group` | Categorical bucket: 0-4 / 5-17 / 18-59 / 60-70 / 71+ |
+
+> **Note:** `season` is displayed in the web app UI for context but is **not** a model input feature — it is fully captured by `month` and its circular encodings.
 
 ### The Three Algorithms
 
@@ -75,13 +88,27 @@ We are **not** building a full hospital system. We are building:
 
 > **Note:** The professor specifically suggested Decision Trees over XGBoost so the group can properly explain and defend the algorithm during the oral discussion.
 
-### Results (on synthetic data)
+### Results (on synthetic data, 10,000 rows, 80/20 split)
 
-| Model | MAE | RMSE | R² |
+| Model | CV MAE | Test MAE | Improvement vs Baseline |
 |---|---|---|---|
-| Linear Regression | ~ 31.18 min | ~ 49.14 min | ~ 0.6264 |
-| Decision Tree | ~ 20.77 min | ~ 37.10 min | ~ 0.7870 |
-| **Random Forest** | **~ 15.51 min** | **~ 29.14 min** | **~ 0.8686** |
+| Naive Baseline (mean) | — | 50.67 min | 0.0% |
+| Linear Regression | 24.38 ± 0.65 | 23.02 min | 54.6% |
+| Decision Tree | 15.55 ± 0.26 | 14.57 min | 71.2% |
+| **Random Forest** | **13.98 ± 0.36** | **12.65 min** | **75.0%** |
+
+The **Random Forest** is the best model and is saved as `best_model.pkl`.
+
+#### Age Sanity Check
+The model correctly learns clinical priority — for identical patients at triage level 3:
+
+| Age | Predicted Wait |
+|---|---|
+| 2 years old | 77.1 min |
+| 35 years old | 81.5 min |
+| 80 years old | 77.2 min |
+
+Adults (18–59) wait longest; children and elderly are prioritised, as expected. The gap is a realistic ~4–5 minutes.
 
 ---
 
@@ -133,7 +160,7 @@ assignment2/
 │   └── synthetic_er_data.csv     ← Generated dataset (10,000 rows)
 │
 ├── model/
-│   ├── train_models.py           ← Train and compare the 3 algorithms
+│   ├── train_models.py           ← Train, engineer features, and compare the 3 algorithms
 │   ├── best_model.pkl            ← Saved best model (Random Forest)
 │   ├── metadata.json             ← Feature names + results summary
 │   └── plots/
@@ -188,7 +215,7 @@ streamlit run app/app.py
 ### Code
 - [x] `data/generate_data.py`
 - [x] `data/synthetic_er_data.csv`
-- [x] `train_models.py`
+- [x] `model/train_models.py`
 - [x] `model/best_model.pkl`
 - [x] `model/plots/` — all 4 plots
 - [x] `app/app.py`
@@ -210,7 +237,7 @@ streamlit run app/app.py
 | **Available Data** | Patient arrivals log, triage records, staffing schedules | ⬜ |
 | **Solution Overview** | Web app + ML model + future integrations | ⬜ |
 | **Predictive Model** | Target: `wait_time_minutes`; list all features | ⬜ |
-| **Empirical Study: Setup** | Synthetic data (10k rows), 80/20 split, metrics | ⬜ |
+| **Empirical Study: Setup** | Synthetic data (10k rows), 80/20 split, 5-fold CV, metrics | ⬜ |
 | **Empirical Study: Results** | Table comparing 3 algorithms + plots | ⬜ |
 | **Stakeholders** | ER doctors, nurses, receptionists, IT, management | ⬜ |
 | **Expected Challenges** | Technical: data quality. Organisational: staff adoption | ⬜ |
@@ -227,6 +254,7 @@ The professor will ask about this. Key concepts to know:
 - **Why depth matters:** A deeper tree memorises the training data (overfitting). We use `max_depth=8` as a balance.
 - **Why Random Forest beats a single tree:** It trains 200 trees on random subsets of data and averages their predictions — this reduces variance and overfitting.
 - **The `decision_tree.png` plot** shows a depth=3 version — use this in slides to explain the concept visually.
+- **CV MAE ± STD:** The small standard deviation on the Decision Tree (±0.26) means it is very stable across folds, which is a good sign.
 
 ---
 

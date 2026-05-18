@@ -344,11 +344,19 @@ if predict_clicked:
         "doctors_on_duty":          int(doctors_on_duty),
         "nurses_on_duty":           int(nurses_on_duty),
     }])
+    AGE_GROUPS = ["0-4", "5-17", "18-59", "60-70", "71+"]
 
     input_data["staff_to_patient_ratio"] = (
         (input_data["doctors_on_duty"] + input_data["nurses_on_duty"])
         / (input_data["patients_in_waiting_room"] + 1)
     )
+    input_data["age_group"] = pd.cut(
+        input_data["patient_age"],
+        bins=[-1, 4, 17, 59, 70, 120],
+        labels=AGE_GROUPS,
+    )
+    age = input_data["patient_age"].astype(float)
+    input_data["age_priority_score"] = np.clip(np.abs(age - 38.0) / 38.0, 0.0, 1.0)
     input_data["hour_sin"]  = np.sin(2 * np.pi * input_data["hour_of_day"] / 24)
     input_data["hour_cos"]  = np.cos(2 * np.pi * input_data["hour_of_day"] / 24)
     input_data["month_sin"] = np.sin(2 * np.pi * input_data["month"] / 12)
