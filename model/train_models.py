@@ -119,10 +119,6 @@ X = add_shared_features(X)
 NUMERIC_FEATURES = [f for f in BASE_NUMERIC_FEATURES if f != "patient_age"] + [
     "staff_to_patient_ratio",
     "age_priority_score",
-    "hour_sin",
-    "hour_cos",
-    "month_sin",
-    "month_cos",
 ]
 
 ALL_FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES
@@ -259,6 +255,17 @@ print("Age sanity check predictions (2yo / 35yo / 80yo):", np.round(sanity_preds
 assert sanity_preds[1] > sanity_preds[0], "Expected 35-year-old to wait longer than 2-year-old"
 assert sanity_preds[1] > sanity_preds[2], "Expected 35-year-old to wait longer than 80-year-old"
 assert sanity_preds[1] == max(sanity_preds), "Expected 35-year-old to have the longest predicted wait"
+
+# Time sanity check: evening wait should rise from 17:00 to 20:00.
+time_probe = pd.DataFrame([{
+    "hour_of_day": h, "day_of_week": 5, "is_weekend": 1, "month": 1,
+    "patient_age": 35, "triage_level": 3, "chief_complaint_category": "Other",
+    "patients_in_waiting_room": 18, "doctors_on_duty": 3, "nurses_on_duty": 6,
+} for h in range(17, 21)])
+time_probe = add_shared_features(time_probe)
+time_preds = pipelines[best_name].predict(time_probe)
+print("Time sanity check predictions (17-20h):", np.round(time_preds, 1).tolist())
+assert np.all(np.diff(time_preds) >= -1e-6), "Expected predictions to rise or stay flat from 17:00 to 20:00"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8.  PLOT 1 — Model Comparison Bar Chart

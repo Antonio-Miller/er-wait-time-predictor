@@ -10,11 +10,7 @@
     "doctors_on_duty",
     "nurses_on_duty",
     "staff_to_patient_ratio",
-    "age_priority_score",
-    "hour_sin",
-    "hour_cos",
-    "month_sin",
-    "month_cos"
+    "age_priority_score"
   ],
   "categorical_features": [
     "chief_complaint_category",
@@ -31,25 +27,22 @@
     "nurses_on_duty",
     "staff_to_patient_ratio",
     "age_priority_score",
-    "hour_sin",
-    "hour_cos",
-    "month_sin",
-    "month_cos",
     "chief_complaint_category",
     "age_group"
   ],
   "target": "wait_time_minutes",
-  "baseline_mae": 28.3115,
+  "baseline_mae": 28.3004,
   "results": {
     "Linear Regression": {
-      "MAE": 12.2648,
-      "RMSE": 17.3589,
-      "R2": 0.7829,
-      "CV_MAE": 12.7121,
-      "CV_STD": 0.2664,
-      "improvement_pct": 56.68
+      "MAE": 15.6081,
+      "RMSE": 21.6153,
+      "R2": 0.6636,
+      "CV_MAE": 16.3608,
+      "CV_STD": 0.3996,
+      "improvement_pct": 44.85
     },
     "Decision Tree": {
+<<<<<<< HEAD
       "MAE": 10.4865,
       "RMSE": 15.1733,
       "R2": 0.8341,
@@ -64,6 +57,22 @@
       "CV_MAE": 9.2569,
       "CV_STD": 0.059,
       "improvement_pct": 69.2
+=======
+      "MAE": 13.5721,
+      "RMSE": 20.7678,
+      "R2": 0.6894,
+      "CV_MAE": 14.0442,
+      "CV_STD": 0.305,
+      "improvement_pct": 52.04
+    },
+    "Random Forest": {
+      "MAE": 11.7474,
+      "RMSE": 18.06,
+      "R2": 0.7651,
+      "CV_MAE": 12.4542,
+      "CV_STD": 0.3377,
+      "improvement_pct": 58.49
+>>>>>>> 18fae5c (small fixes)
     }
   }
 }

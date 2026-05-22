@@ -117,7 +117,8 @@ nurses_on_duty = clamp(np.round(nurse_base).astype(int), 2, 16)
 # 4.  ARRIVAL RATE  λ  (patients / hour)
 #
 #     Peak order (intentional):
-#       17–20h  ×3.0  >  07–10h  ×2.2  >  22–00h  ×1.25 >  00–02h  ×1.0
+#       17–20h ramps upward through the evening peak, 07–10h is a morning surge,
+#       22–00h is a late-evening taper, and 00–02h is the midnight spike.
 #     Deep quiet 03–06h  ×0.20
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -129,11 +130,14 @@ hour_mult = np.select(
         (hour_of_day >= 7)  & (hour_of_day <= 10),   # morning surge
         (hour_of_day >= 11) & (hour_of_day <= 13),   # midday dip
         (hour_of_day >= 14) & (hour_of_day <= 16),   # afternoon build
-        (hour_of_day >= 17) & (hour_of_day <= 20),   # evening PEAK
+        hour_of_day == 17,
+        hour_of_day == 18,
+        hour_of_day == 19,
+        hour_of_day == 20,
         (hour_of_day >= 21) & (hour_of_day <= 23),   # late evening
         (hour_of_day >= 0)  & (hour_of_day <= 2),    # midnight spike (capped)
     ],
-    [0.20, 2.20, 1.10, 1.50, 3.00, 1.25, 1.00],
+    [0.20, 2.20, 1.10, 1.50, 2.55, 2.80, 3.00, 3.20, 1.25, 1.00],
     default=1.00,
 )
 
@@ -202,8 +206,15 @@ mm_c_wait_minutes = clamp(W_q_hours * 60.0, 0.0, 360.0)
 
 W_total_hours = W_q_hours + 1.0 / np.maximum(mu, 0.1)
 L_system      = lam * W_total_hours
+queue_baseline = (
+    4.0
+    + 1.4 * hour_mult
+    + 1.8 * weekend_lam_mult
+    + 0.7 * season_lam_mult
+    + 0.15 * (lam / np.maximum(mu, 0.1))
+)
 patients_in_waiting_room = clamp(
-    np.round(L_system * 0.60 + rng.normal(0, 3, N_ROWS)).astype(int),
+    np.round(queue_baseline + rng.normal(0, 4.5, N_ROWS)).astype(int),
     0, 80,
 )
 
@@ -308,10 +319,13 @@ night_overhead   = np.where((hour_of_day >= 23) | (hour_of_day <= 6), 7.0, 0.0)
 weekend_overhead = np.where(is_weekend == 1, 16.0, 0.0)
 winter_overhead  = np.where(np.isin(month, [12, 1, 2]),  8.0, 0.0)
 peak_overhead    = np.where(
-    ((hour_of_day >= 8) & (hour_of_day <= 10))
-    | ((hour_of_day >= 17) & (hour_of_day <= 19)),
+    (hour_of_day >= 8) & (hour_of_day <= 10),
     12.0,
-    0.0,
+    np.select(
+        [hour_of_day == 17, hour_of_day == 18, hour_of_day == 19, hour_of_day == 20],
+        [12.0, 13.0, 14.0, 15.0],
+        default=0.0,
+    ),
 )
 
 operational_overhead = (
