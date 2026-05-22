@@ -94,22 +94,22 @@ We are **not** building a full hospital system. We are building:
 ### Overall Wait Time Distribution
 | Statistic | Value |
 |---|---|
-| Mean | 58.9 min |
-| Std | 38.4 min |
+| Mean | 59.4 min |
+| Std | 38.5 min |
 | Min | 1.0 min |
-| 25th percentile | 33.6 min |
-| Median | 52.4 min |
-| 75th percentile | 76.7 min |
+| 25th percentile | 34.1 min |
+| Median | 53.0 min |
+| 75th percentile | 77.3 min |
 | Max | 279.0 min |
 
 ### Model Comparison
 
 | Model | CV MAE | Test MAE | Improvement vs Baseline |
 |---|---|---|---|
-| Naive Baseline (mean) | — | 28.31 min | 0.0% |
-| Linear Regression | 12.71 ± 0.27 | 12.26 min | 56.7% |
-| Decision Tree | 10.85 ± 0.13 | 10.49 min | 63.0% |
-| **Random Forest** | **9.26 ± 0.06** | **8.72 min** | **69.2%** |
+| Naive Baseline (mean) | — | 28.30 min | 0.0% |
+| Linear Regression | 16.36 ± 0.40 | 15.61 min | 44.8% |
+| Decision Tree | 14.04 ± 0.30 | 13.57 min | 52.0% |
+| **Random Forest** | **12.45 ± 0.34** | **11.75 min** | **58.5** |
 
 The **Random Forest** is the best model and is saved as `model/best_model.pkl`.
 
@@ -119,30 +119,30 @@ Key patterns confirmed in the generated data:
 
 | Check | Result |
 |---|---|
-| Weekend vs Weekday mean wait | 82.3 min vs 49.7 min ✅ |
-| Peak hours (07–10h, 17–20h) vs quiet (03–06h) | 67.0–67.4 min vs 52.5 min ✅ |
-| Winter vs other seasons | 72.1 min vs ~54–55 min ✅ |
-| Trauma/Cardiac vs Musculoskeletal/Other | 47.4–47.8 min vs 67.1–70.2 min ✅ |
+| Weekend vs Weekday mean wait | 82.8 min vs 50.3 min ✅ |
+| Peak hours (07–10h, 17–20h) vs quiet (03–06h) | 71.2–65.3, 67.1-71.3 min vs 50.5-53.8 min ✅ |
+| Winter vs other seasons | 72.5 min vs 54.5–56.1 min ✅ |
+| Trauma/Cardiac vs Musculoskeletal/Other | 48.1-48.6 min vs 67.7–70.5 min ✅ |
 
 ### Mean Wait by Triage Level
 
 | Triage | Meaning | Mean Wait |
 |---|---|---|
 | 1 | Immediate | 3.1 min |
-| 2 | Emergent | 27.0 min |
-| 3 | Urgent | 42.8 min |
-| 4 | Less Urgent | 62.8 min |
-| 5 | Non-Urgent | 92.6 min |
+| 2 | Emergent | 27.8 min |
+| 3 | Urgent | 43.4 min |
+| 4 | Less Urgent | 63.4 min |
+| 5 | Non-Urgent | 93.0 min |
 
-### Age Priority Check (Triage 2–5 only)
+### Age Priority Check 
 
 | Age Group | Mean Wait |
 |---|---|
-| Under 5 | 53.6 min |
-| 5–17 | 58.9 min |
-| **18–59** | **71.7 min** ← longest |
-| 60–70 | 59.8 min |
-| 71+ | 55.8 min |
+| Under 5 | 54.1 min |
+| 5–17 | 59.6 min |
+| **18–59** | **72.3 min** ← longest |
+| 60–70 | 60.3 min |
+| 71+ | 56.6 min |
 
 Adults (18–59) wait longest; children and elderly are prioritised, as expected.
 
@@ -150,9 +150,9 @@ Adults (18–59) wait longest; children and elderly are prioritised, as expected
 
 | Patient | Predicted Wait |
 |---|---|
-| 2 years old | 57.3 min |
-| **35 years old** | **61.5 min** ← longest |
-| 80 years old | 57.4 min |
+| 2 years old | 58 min |
+| **35 years old** | **71 min** ← longest |
+| 80 years old | 58 min |
 
 The model correctly learns the clinical priority pattern.
 
@@ -181,6 +181,9 @@ assignment2/
 │
 ├── app/
 │   └── app.py                    ← Streamlit web application
+|
+├── scripts/
+│   └── check_synthetic_data.py   ← Optional validation script (pattern sanity checks)
 │
 ├── presentation/
 │   └── assignment2_slides.pptx
@@ -226,6 +229,14 @@ Outputs:
 streamlit run app/app.py
 ```
 
+### Step 5 (Optional) — Validate Synthetic Data Patterns
+ 
+```bash
+python3 scripts/check_synthetic_data.py
+```
+ 
+Regenerates the dataset and runs statistical assertions to confirm that all intended patterns hold (weekend effect, peak hour effect, age priority). Useful for debugging the generator.
+
 ---
 
 ## Deliverables Checklist
@@ -247,9 +258,7 @@ streamlit run app/app.py
 
 ---
 
-## Understanding Decision Trees (for oral defence)
-
-The professor will ask about this. Key concepts to know:
+## Understanding Decision Trees 
 
 - **How it works:** At each node, the tree splits the data on the feature that most reduces prediction error (measured by MSE reduction). It keeps splitting until it reaches `max_depth`.
 - **Why depth matters:** A deeper tree memorises the training data (overfitting). We use `max_depth=8` as a balance between expressiveness and generalisation.
