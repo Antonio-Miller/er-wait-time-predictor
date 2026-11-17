@@ -4,7 +4,7 @@ A machine learning proof of concept that predicts **how many minutes a patient w
 
 A **Streamlit web app** lets reception staff enter the patient's data and get an instant prediction, colour-coded by expected wait (under 30 minutes, 30 to 60 minutes, over 60 minutes).
 
-Built by a team of 3 for the Artificial Intelligence course (L.EIC, FEUP, 2025/26), Assignment 2: a machine learning consulting proof of concept framed around the emergency department of a hospital in Porto.
+Built by a team of 3 for the Artificial Intelligence course (L.EIC, FEUP, 2025/26), Assignment 2: a machine learning consulting proof of concept framed around the emergency department of a hospital in Porto. Grade: **18.6/20**.
 
 ## How it works
 
